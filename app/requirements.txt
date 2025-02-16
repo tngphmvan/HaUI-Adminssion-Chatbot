@@ -1,0 +1,10 @@
+chainlit
+openai
+groq
+langchain
+langchain_core
+docx
+streamlit
+chromadb
+langchain_text_splitter 
+langchain_chroma

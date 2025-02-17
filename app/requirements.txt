@@ -8,3 +8,4 @@ streamlit
 chromadb
 langchain_text_splitter 
 langchain_chroma
+dotenv

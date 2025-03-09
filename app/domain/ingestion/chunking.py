@@ -1,57 +1,79 @@
-"""Chunking for table and text"""
+"""
+Chunking module for chunking text and table data from .docx files.
+"""
 
+from io import BytesIO
+from pathlib import Path
 from typing import List
 
+from docling.datamodel.base_models import DocumentStream, InputFormat
+from docling.document_converter import DocumentConverter, WordFormatOption
+from docling_core.transforms.chunker import HierarchicalChunker
+from fastapi import UploadFile, File
 from langchain_core.documents.base import Document as LangchainDocument
-from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
+
+from api.logging_theme import setup_logger
 
 
-def table_chunking(table_markdown: str, chunk_size: int = 1500) -> list:
+class ChunkProcessor:
     """
-    Chunking for table
-    Args:
-        table_markdown (str): Markdown table
-        chunk_size (str): length of each chunk
-
-    Returns:
-        list: list of chunks
+    Define Chunk Processor
     """
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=0,  # Advoid duplicate data
-        separators=["\n\n", "\n", " "]  # keep the row
-    )
-    lines = table_markdown.split("\n")
-    header = lines[0] + '\n' + lines[1]
-    chunks = splitter.split_text(table_markdown)
-    return [header + "\n" + chunk for i, chunk in enumerate(chunks)]
 
+    def __init__(self):
+        self.all_chunks: List[LangchainDocument] = []
+        self.logger = setup_logger(__name__)
 
-def title_chunking(text: str, chunk_size: int = 1500, chunk_overlap: int = 500) -> List[LangchainDocument]:
-    """
-        Chunking for text
-    Args:
-        text (str): text to split
-        chunk_size (str): length of each chunk
-        chunk_overlap (str): length of overlap between chunks
+    async def chunking(self, file: UploadFile = File(...)) -> List[LangchainDocument]:
+        """
+        Chunking for text and table asynchronously
+        Args:
+            file (UploadFile): file to chunk
 
-    Returns:
-        list: list of chunks
-    """
-    headers_to_split_on = [
-        ("#", "Header 1"),
-        ("##", "Header 2"),
-        ("###", "Header 3")
-    ]
+        Returns:
+            list: list of chunks
 
-    markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on, strip_headers=False)
-    md_header_splits = markdown_splitter.split_text(text)
+        Raises:
+            ValueError: If file type is not supported or processing fails
+        """
 
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size, chunk_overlap=chunk_overlap
-    )
+        if not file:
+            self.logger.error("No files provided for chunking")
+            raise ValueError("No files provided for chunking")
 
-    splits = text_splitter.split_documents(md_header_splits)
+        self.logger.info(f"Processing file: {file.filename}")
 
-    return splits
+        if not file.filename:
+            self.logger.error("Empty filename detected")
+            raise ValueError("Empty filename detected")
 
+        file_extension = Path(file.filename).suffix.lower()
+        if file_extension != '.docx':
+            self.logger.error(f"Unsupported file type: {file_extension}. Only .docx files are supported")
+            raise ValueError(f"Unsupported file type: {file_extension}. Only .docx files are supported")
+
+        # Create task async for file
+
+        buf = BytesIO(await file.read())
+        source = DocumentStream(name=file.filename, stream=buf)
+        pipline_options = WordFormatOption()
+        coverter = DocumentConverter(
+            format_options={
+                InputFormat.DOCX: WordFormatOption(pipline_options=pipline_options)
+            }
+        )
+        doc = coverter.convert(source=source).document
+        chunker = HierarchicalChunker()
+        chunk_iter = chunker.chunk(doc)
+        chunks = [
+            LangchainDocument(
+                page_content=chunker.serialize(chunk=chunk),
+                metadata={"file_path": file.filename}
+            )
+            for chunk in chunk_iter
+        ]
+
+        # Store all chunks
+        self.all_chunks.extend(chunks)
+        self.logger.info(f"Chunking completed successfully. Total chunks: {len(self.all_chunks)}")
+        return self.all_chunks

@@ -1,30 +1,37 @@
-from typing import List
-from app.domain.retrieval.vectorstores import get_vectorstore
-from langchain_chroma import Chroma
-from langchain_core.documents import Document as LangchainDocument
+"""
+This module contains a class for performing semantic search on Qdrant.
+"""
 from langchain_core.vectorstores import VectorStoreRetriever
-from app.utils.configs import embeddings
+
+from api.logging_theme import setup_logger
+from domain.retrieval.vectorstores import VectorStore
 
 
-def semantic_search(query: str, collection_name: str, k: int = 5) -> List[LangchainDocument]:
-    """Tìm kiếm ngữ nghĩa trên ChromaDB."""
-    vectorstore = get_vectorstore(collection_name)
+class SearchEngine:
+    """
+    This class contains functions for performing semantic search on Qdrant.
+    """
+    def __init__(self, collection_name: str, k: int = 5):
+        self.collection_name = collection_name
+        self.k = k
+        self.logger = setup_logger(__name__)
 
-    results: List[LangchainDocument] = vectorstore.similarity_search(query, k=k)
+    def semantic_search(self) -> VectorStoreRetriever:
+        """
+        Perform semantic search on Qdrant.
 
-    return results
+        Returns:
+            VectorStoreRetriever: A retriever configured for semantic similarity search.
+        """
+        try:
+            vectorstore = VectorStore(collection_name=self.collection_name).get_vectorstore()
+            self.logger.info(f"Retrieved vectorstore successfully created for collection {self.collection_name} with k={self.k}")
+        except Exception as e:
+            self.logger.error(f"Error retrieving vectorstore for collection {self.collection_name}: {e}")
+            raise ValueError(f"Error retrieving vectorstore for collection {self.collection_name}: {e}")
 
-def multiple_semantic_search(query: str, collection_names: List[str], k: int = 5) -> VectorStoreRetriever:
-    """Tìm kiếm trên nhiều collection và trả về Retriever thay vì danh sách Document."""
-    all_documents = []
-
-    for collection_name in collection_names:
-        vectorstore = get_vectorstore(collection_name)
-        results = vectorstore.similarity_search(query, k=k)
-        all_documents.extend(results)
-
-    # Tạo vectorstore từ danh sách tài liệu
-    vectorstore = Chroma.from_documents(all_documents, embeddings)
-
-    return vectorstore.as_retriever()  # Trả về retriever thay vì danh sách Document
-
+        try:
+            return vectorstore.as_retriever(search_kwargs={"k": self.k})
+        except Exception as e:
+            self.logger.error(f"Error creating retriever for collection {self.collection_name} with k={self.k}: {e}")
+            raise ValueError(f"Error creating retriever for collection {self.collection_name} with k={self.k}: {e}")

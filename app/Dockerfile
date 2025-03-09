@@ -1,17 +1,21 @@
 # Sử dụng Python làm base image
 FROM python:3.11-slim
 
-# Thiết lập thư mục làm việc
+# set the working directory in the container
 WORKDIR /app
 
-# Sao chép tệp requirements.txt vào container
+# Copy file requirements.txt vào container
 COPY requirements.txt .
 
-# Cài đặt các thư viện Python cần thiết
+# Install essential packages
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Sao chép toàn bộ mã nguồn vào container
+# copy all the files to the container
 COPY . .
 
-# Mở các cổng cần thiết
-EXPOSE 8501 8000
+# expose the port 8000
+EXPOSE 8000:8000
+
+# command to run on container start
+CMD [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--workers", "4" ]
+

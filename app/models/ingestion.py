@@ -1,43 +1,59 @@
-"""Define Ingestion Pipeline"""
-
-import uuid
+"""
+This module contains the IngestionManager class, which is responsible for managing the ingestion of documents into the Qdrant collection.
+"""
 from typing import List, Any
 
+from fastapi import UploadFile, File
 from langchain_core.documents.base import Document as LangchainDocument
 
-from app.domain.ingestion.chunking import table_chunking, title_chunking
-from app.domain.ingestion.docx_parsing import read_docx
-from app.domain.ingestion.indexing import ingest_data, create_collection
+from api.logging_theme import setup_logger
+from domain.ingestion.chunking import ChunkProcessor
+from domain.ingestion.docx_parsing import DocxParser
+from domain.ingestion.indexing import IngestionPipeline
 
 
-def ingest(collection_name: str, file_path: str, source: str) -> List[Any] | None:
+class IngestionManager:
     """
-
-    Args:
-        collection_name:
-        file_path:
-        source:
-
-    Returns:
-
+    Object-oriented manager for document ingestion.
     """
-    markdown_content, text_content, table_content = read_docx(file_path)
+    def __init__(self, collection_name: str):
+        self.collection_name = collection_name
+        self.logger = setup_logger(__name__)
 
-    res: List[Any] = []
+    async def ingest(self, file: UploadFile = File(...)) -> bool:
+        """
+        Ingests documents from uploaded files into the specified collection.
 
-    for table in table_content:
-        for chunk in table_chunking(table):
-            res.append(
-                LangchainDocument(page_content=chunk,
-                                  metadata={"heading": "table", "id": str(uuid.uuid4()), "source": source}))
+        Args:
+            file (UploadFile): List of uploaded files.
 
-    for chunk in title_chunking(markdown_content):
-        chunk.metadata["id"] = str(uuid.uuid4())
-        chunk.metadata["source"] = source
-        res.append(chunk)
+        Returns:
+            Any: Result of the ingestion process.
+        """
+        chunks: List[LangchainDocument] = await ChunkProcessor().chunking(file)
+        try:
+            await IngestionPipeline(collection_name=self.collection_name).ingest_data(chunks=chunks)
+            self.logger.info("Ingestion of documents into collection successfully")
+            return True
+        except Exception as e:
+            self.logger.error(f"Error ingesting data into Qdrant collection {e}")
+            raise ValueError(f"Error ingesting data into Qdrant collection {e}")
 
-    try:
-        ingest_data(collection_name=collection_name, chunks=res)
-        return res
-    except Exception as e:
-        print(e)
+    async def ingest_faq(self, file: UploadFile = File(...)) -> Any:
+        """
+        Ingests FAQ documents from uploaded files into the specified collection.
+
+        Args:
+            file (UploadFile): List of uploaded files.
+
+        Returns:
+            Any: Result of the ingestion process.
+        """
+        chunks: List[LangchainDocument] = await DocxParser().faq_parsing(file)
+        try:
+            await IngestionPipeline(collection_name=self.collection_name).ingest_data(chunks=chunks)
+            self.logger.info(f"Ingestion of faq into collection successfully")
+            return True
+        except Exception as e:
+            self.logger.error(f"Error ingesting FAQ data into Qdrant collection {e}")
+            raise ValueError(f"Error: {e}")

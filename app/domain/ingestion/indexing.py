@@ -1,44 +1,45 @@
-import uuid
+"""
+This module contains functions to ingest data into Qdrant collection.
+"""
 from typing import List
 
-from langchain_chroma import Chroma
 from langchain_core.documents import Document as LangchainDocument
+from langchain_qdrant import QdrantVectorStore, RetrievalMode
 
-from app.utils.configs import client, embeddings  # Import tuyệt đối
+from api.logging_theme import setup_logger
+from utils.configs import embeddings, spare_embeddings
 
-def create_collection(collection_name:str)->bool:
+
+class IngestionPipeline:
     """
-    Create ChromaDB collection
-    Returns:
-        str: collection name
+    Define Ingestion Pipeline
     """
-    try:
-        collection = client.get_or_create_collection(name=collection_name)
-        print(f"✅ Collection '{collection_name}' đã được tạo!")
-        return True
-    except Exception as e:
-        print(e)
+    def __init__(self, collection_name):
+        self.collection_name = collection_name
+        self.logger = setup_logger(__name__)
 
+    async def ingest_data(self, chunks: List[LangchainDocument]):
+        """
+        Ingest data into collection.
+        Args:
+            chunks (List[LangchainDocument]): List of LangchainDocuments chunks
 
-def ingest_data(collection_name: str, chunks: List[LangchainDocument]) -> str:
-    """
-    Ingest data into collection.
-    Args:
-        collection_name (str): Name of ChromaDB collection
-        chunks (List[LangchainDocument]): List of LangchainDocuments chunks
-
-    Returns:
-        bool: True if collection was successfully ingested else False
-    """
-    try:
-        # Init Vector store
-        vectorstore = Chroma(
-            client=client,
-            collection_name=collection_name,
-            embedding_function=embeddings
-        )
-        # add document
-        vectorstore.add_documents(chunks)
-        return collection_name
-    except Exception as e:
-        print(e)
+        Returns:
+            bool: True if collection was successfully ingested else False
+        """
+        try:
+            # Init Vector store
+            await QdrantVectorStore.afrom_documents(
+                documents=chunks,
+                embedding=embeddings,
+                sparse_embedding=spare_embeddings,
+                url="http://localhost:6333/",
+                prefer_grpc=True,
+                collection_name=self.collection_name,
+                retrieval_mode=RetrievalMode.HYBRID
+            )
+            self.logger.info(f"Successfully ingest into Qdrant collection: {self.collection_name}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Error ingesting data into Qdrant collection: {str(e)}")
+            raise ValueError(f"Error ingesting data into Qdrant collection: {str(e)}")

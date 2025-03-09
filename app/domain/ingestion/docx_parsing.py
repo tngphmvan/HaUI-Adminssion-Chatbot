@@ -1,102 +1,49 @@
 # app/utils/docx_parsing.py
+"""
+This module contains functions for parsing files.
+"""
+import io
+from typing import List
 
-import re
-from typing import List, Tuple, Any
+import pandas as pd
+from fastapi import UploadFile, File
+from langchain_core.documents.base import Document as LangchainDocument
 
-# from docx.document import Document as DocxDocument
-from docx import Document as DocxDocument
+from api.logging_theme import setup_logger
 
 
-def read_docx(file_path: str) -> Tuple[str, str, List[str]]:
+class DocxParser:
     """
-    Đọc file .docx và trích xuất văn bản và bảng, kết hợp chúng thành một chuỗi Markdown
-    theo đúng thứ tự xuất hiện trong file.
-
-    Args:
-        file_path (str): Đường dẫn đến file .docx.
-
-    Returns:
-        Tuple[str, str, str]: Markdown content, text content, table content
+    Define Docx Parser
     """
-    doc: DocxDocument = DocxDocument(file_path)
-    markdown_content = ""
-    paragraph_index = 0
-    table_index = 0
-    text_content = ""
-    table_content: List[str] = []
 
-    for element in doc.element.body:
-        if element.tag.endswith('p'):
-            if paragraph_index < len(doc.paragraphs):
-                paragraph = doc.paragraphs[paragraph_index]
-                text = paragraph.text.strip()
-                if text:
-                    is_bold = any(run.bold for run in paragraph.runs)
+    def __init__(self):
+        self.results: List[LangchainDocument] = []
+        self.logger = setup_logger(__name__)
 
-                    # Header 1: In đậm + CHỮ HOA
-                    if is_bold and text.isupper():
-                        markdown_content += f"# {text}\n\n"
-                        text_content += "f{text}\n\n"
+    async def faq_parsing(self, upload_file: UploadFile = File(...), question_column_name: str = "CÂU HỎI",
+                          answer_column_name: str = "CÂU TRẢ LỜI ", header: int = 1) -> List[LangchainDocument]:
+        """
+        Reads a CSV file containing FAQ data and returns a list of LangchainDocument objects.
 
-                    # Header 2: In đậm + Bắt đầu bằng số Latin
-                    elif is_bold and re.match(r"^\d+\.", text):
-                        markdown_content += f"## {text}\n\n"
-                        text_content += "f{text}\n\n"
+        Args:
+            upload_file (UploadFile): The list of uploaded CSV files containing FAQ data.
+            question_column_name (str): The column name for questions in the CSV file.
+            answer_column_name (str): The column name for answers in the CSV file.
 
-                    # Văn bản thường
-                    else:
-                        markdown_content += f"{text}\n\n"
-                        text_content += "f{text}\n\n"
-
-                paragraph_index += 1
-
-        elif element.tag.endswith('tbl'):
-            if table_index < len(doc.tables):
-                table = doc.tables[table_index]
-                table_data = []
-                for row in table.rows:
-                    row_data = [cell.text.strip().replace("\n", " ") for cell in row.cells]
-                    table_data.append(row_data)
-
-                markdown_table = "| " + " | ".join(table_data[0]) + " |\n"
-                markdown_table += "| " + " | ".join(["---"] * len(table_data[0])) + " |\n"
-                for row in table_data[1:]:
-                    markdown_table += "| " + " | ".join(row) + " |\n"
-
-                markdown_content += markdown_table + "\n"
-                table_index += 1
-                table_content.append(markdown_table)
-
-    return markdown_content, text_content, table_content
-
-
-def detect_markdown_tables(md_text):
-    # Regex tìm bảng Markdown
-    table_pattern = re.compile(r"(?:\|.*?\|\n)+\|[-:| ]+\|\n(?:\|.*?\|\n)+"
-                               r"|(?:\S+\s*\|\s*\S+.*\n)(?:[-:]+[\| ]+[-:]+\n)(?:\S+\s*\|\s*\S+.*\n)+")
-
-    tables = table_pattern.findall(md_text)
-    return tables
-
-
-if __name__ == '__main__':
-    mardown_content, text_content, table_content = read_docx(
-        file_path=r"C:\Users\Vitus\Downloads\Telegram Desktop\QD342 De an tuyen sinh dai hoc 2024 (web)A.docx")
-
-    # with open("table.md", "w", encoding="utf-8") as file:
-    #     for table in hola:
-    #         file.write(table)
-
-    # Phát hiện bảng
-    tables = detect_markdown_tables(table_content)
-
-    res: List[Any] = []
-    # In kết quả
-
-    for chunk in table_chunking(table_content):
-        res.append(LangchainDocument(page_content=chunk, metadata={"heading": "table"}))
-
-    for chunk in title_chunking(mardown_content):
-        res.append(chunk)
-
-    print(res)
+        Returns:
+            List[LangchainDocument]: A list of LangchainDocument objects with page content set to the question
+                                     and metadata containing the answer.
+        """
+        try:
+            content = await upload_file.read()
+            faq = pd.read_csv(io.BytesIO(content), header=header)
+            self.logger.debug(faq)
+            for item in faq.to_dict(orient="records"):
+                self.results.append(LangchainDocument(page_content=item[question_column_name],
+                                                      metadata={"answer": item[answer_column_name]}))
+            self.logger.info(f"Successfully parsed {len(self.results)} FAQ data")
+            return self.results
+        except Exception as e:
+            self.logger.error(f"Error parsing FAQ data: {str(e)}")
+            raise ValueError(f"Error parsing FAQ data: {str(e)}")

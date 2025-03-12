@@ -43,15 +43,12 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000 --reload --log-level debug 
 5. Access the API documentation at `http://localhost:8000/docs`.
 
 ## 🔥 Docker Deployment
-1. Build the Docker image:
+
+1. Run the Docker container:
 ```bash
-docker build -t haui-chatbot .
+docker compose up -d
 ```
-2. Run the Docker container:
-```bash
-docker run -d -p 8000:8000 haui-chatbot
-```
-3. Access the API documentation at `http://localhost:8000/docs`.
+2. Access the API documentation at `http://localhost:8000/docs`.
 
 ## 🎯 Usage Guide
 1. API endpoints available at http://localhost:8000/docs

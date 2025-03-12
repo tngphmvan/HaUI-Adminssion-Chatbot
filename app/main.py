@@ -5,8 +5,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import file_uploading, pipeline
-from .external_services.patches.custom_docling import export_to_dataframe_new
-from app.external_services.patches.custom_docling import TableItem
+from external_services.patches.custom_docling import export_to_dataframe_new
+from external_services.patches.custom_docling import TableItem
 
 TableItem.export_to_dataframe = export_to_dataframe_new
 

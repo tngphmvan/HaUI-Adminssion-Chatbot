@@ -29,7 +29,7 @@ class VectorStore:
             self.logger.info(f"Connecting to Qdrant collection: {self.collection_name}")
             vectorstore = QdrantVectorStore.from_existing_collection(
                 collection_name=self.collection_name,
-                url="http://localhost:6333/",
+                url="http://qdrant:6333/",
                 prefer_grpc=True,
                 embedding=embeddings,
                 retrieval_mode=RetrievalMode.HYBRID,

@@ -9,7 +9,6 @@ from langchain_qdrant import QdrantVectorStore, RetrievalMode
 from api.logging_theme import setup_logger
 from utils.configs import embeddings, spare_embeddings
 
-
 class IngestionPipeline:
     """
     Define Ingestion Pipeline
@@ -33,7 +32,7 @@ class IngestionPipeline:
                 documents=chunks,
                 embedding=embeddings,
                 sparse_embedding=spare_embeddings,
-                url="http://localhost:6333/",
+                url="http://qdrant:6333/",
                 prefer_grpc=True,
                 collection_name=self.collection_name,
                 retrieval_mode=RetrievalMode.HYBRID

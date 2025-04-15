@@ -10,9 +10,10 @@ class Pipline:
     """
     This class contains functions for managing the pipeline.
     """
-    def __init__(self, collection_name: str):
+    def __init__(self, collection_name: str, system_prompt: str):
         self.collection_name = collection_name
         self.logger = setup_logger(__name__)
+        self.system_prompt = system_prompt
 
     async def stream_rag_response(self, question: str, session_id: str):
         """Stream RAG response to the user's question.
@@ -39,7 +40,7 @@ class Pipline:
 
         try:
             # Get RAG retrieval chain
-            rag_chain = RAGPipeline(collection_name=self.collection_name).conversational_chain()
+            rag_chain = RAGPipeline(collection_name=self.collection_name).conversational_chain(promptTemplate=self.system_prompt)
         except Exception as e:
             self.logger.error("Error occurred while creating RAG retrieval chain: %s", e, exc_info=True)
             yield "An error occurred while processing your question.\n"

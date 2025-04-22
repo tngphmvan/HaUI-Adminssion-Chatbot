@@ -16,11 +16,12 @@ class IngestionManager:
     """
     Object-oriented manager for document ingestion.
     """
-    def __init__(self, collection_name: str):
+    def __init__(self, collection_name: str, header_rows: int):
         self.collection_name = collection_name
         self.logger = setup_logger(__name__)
+        self.header_rows = header_rows
 
-    async def ingest(self, file: UploadFile = File(...)) -> bool:
+    async def ingest(self, file: UploadFile = File(...)) -> (bool, list):
         """
         Ingests documents from uploaded files into the specified collection.
 
@@ -30,11 +31,11 @@ class IngestionManager:
         Returns:
             Any: Result of the ingestion process.
         """
-        chunks: List[LangchainDocument] = await ChunkProcessor().chunking(file)
+        chunks: List[LangchainDocument] = await ChunkProcessor().chunking(file, header_rows=self.header_rows)
         try:
-            await IngestionPipeline(collection_name=self.collection_name).ingest_data(chunks=chunks)
+            status, ids = await IngestionPipeline(collection_name=self.collection_name).ingest_data(chunks=chunks)
             self.logger.info("Ingestion of documents into collection successfully")
-            return True
+            return status, ids
         except Exception as e:
             self.logger.error(f"Error ingesting data into Qdrant collection {e}")
             raise ValueError(f"Error ingesting data into Qdrant collection {e}")
@@ -51,9 +52,9 @@ class IngestionManager:
         """
         chunks: List[LangchainDocument] = await DocxParser().faq_parsing(file)
         try:
-            await IngestionPipeline(collection_name=self.collection_name).ingest_data(chunks=chunks)
+            status, ids = await IngestionPipeline(collection_name=self.collection_name).ingest_data(chunks=chunks)
             self.logger.info(f"Ingestion of faq into collection successfully")
-            return True
+            return status, ids
         except Exception as e:
             self.logger.error(f"Error ingesting FAQ data into Qdrant collection {e}")
             raise ValueError(f"Error: {e}")

@@ -8,6 +8,7 @@ from langchain_qdrant import QdrantVectorStore, RetrievalMode
 
 from api.logging_theme import setup_logger
 from utils.configs import embeddings, spare_embeddings
+import uuid
 
 class IngestionPipeline:
     """
@@ -27,6 +28,7 @@ class IngestionPipeline:
             bool: True if collection was successfully ingested else False
         """
         try:
+            ids = [str(uuid.uuid4()) for _ in range(len(chunks))]
             # Init Vector store
             await QdrantVectorStore.afrom_documents(
                 documents=chunks,
@@ -35,10 +37,11 @@ class IngestionPipeline:
                 url="http://qdrant:6333/",
                 prefer_grpc=True,
                 collection_name=self.collection_name,
-                retrieval_mode=RetrievalMode.HYBRID
+                retrieval_mode=RetrievalMode.HYBRID,
+                ids=ids
             )
             self.logger.info(f"Successfully ingest into Qdrant collection: {self.collection_name}")
-            return True
+            return True, ids
         except Exception as e:
             self.logger.error(f"Error ingesting data into Qdrant collection: {str(e)}")
             raise ValueError(f"Error ingesting data into Qdrant collection: {str(e)}")

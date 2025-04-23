@@ -1,13 +1,14 @@
+version: '3.8'
+
 services:
   app:
     build: .
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--log-level", "info", "--workers", "4"]
     restart: always
-    container_name: app
+    container_name: hauichatbot-app
     depends_on:
       - qdrant
     ports:
-      - 8000:8000
+      - "8000:8000"
     env_file:
       - app/.env
     environment:
@@ -17,25 +18,36 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL}
       - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL}
+#      - QDRANT_HOST=qdrant
+#      - QDRANT_PORT=6333
     volumes:
-      - ./app/:/app
+      - ./app:/app
+      - ./qdrant_data:/app/qdrant_data
+    networks:
+      - hauichatbot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   qdrant:
     image: qdrant/qdrant:latest
     restart: always
-    container_name: qdrant
+    container_name: hauichatbot-qdrant
     ports:
-      - 6333:6333
-      - 6334:6334
-    expose:
-      - 6333
-      - 6334
-      - 6335
-    configs:
-      - source: qdrant_config
-        target: /qdrant/config/production.yaml
+      - "6333:6333"
+      - "6334:6334"
     volumes:
       - ./qdrant_data:/qdrant/storage
-configs:
-  qdrant_config:
-    content: |
-      log_level: INFO
+    networks:
+      - hauichatbot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  hauichatbot-network:
+    driver: bridge

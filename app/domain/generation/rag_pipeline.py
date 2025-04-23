@@ -13,6 +13,9 @@ from api.logging_theme import setup_logger
 from domain.generation.prompt_templates import qa_prompt
 from domain.retrieval.search import SearchEngine
 from utils.configs import llm
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
+
 
 
 class RAGPipeline:
@@ -92,7 +95,7 @@ class RAGPipeline:
 
         return get_session_history
 
-    def conversational_chain(self) -> RunnableWithMessageHistory:
+    def conversational_chain(self, promptTemplate: str) -> RunnableWithMessageHistory:
         """
         Create a retrieval-augmented generation chain with conversational memory.
 
@@ -100,7 +103,7 @@ class RAGPipeline:
             RunnableWithMessageHistory: An instance containing the conversational RAG chain.
         """
         try:
-            qa_chain = self.create_qa_chain(self.llm, qa_prompt)
+            qa_chain = self.create_qa_chain(self.llm, self.create_qa_prompt(promptTemplate))
             rag_chain = self.create_rag_chain(qa_chain)
             get_session_history = self.setup_conversation_memory()
             chain = RunnableWithMessageHistory(
@@ -125,3 +128,21 @@ class RAGPipeline:
         except Exception as error:
             self.logger.error("Error setting up conversational chain: %s", error, exc_info=True)
             raise ValueError("Error setting up conversational chain")
+
+    def create_qa_prompt(self, system_prompt: str) -> ChatPromptTemplate:
+        """
+        Create a QA prompt template from a given system prompt.
+
+        Args:
+            system_prompt (str): The system prompt string.
+
+        Returns:
+            ChatPromptTemplate: The created QA prompt template.
+        """
+        return ChatPromptTemplate.from_messages(
+            [
+                ("system", system_prompt),
+                MessagesPlaceholder("chat_history"),
+                ("human", "{input}"),
+            ]
+        )
